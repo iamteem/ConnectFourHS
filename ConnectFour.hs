@@ -20,12 +20,14 @@ showSquare s
   | s == Just (Piece Blue) = 'b'
   | otherwise = '-'
 
+boardSize :: Board -> (Int, Int)
+boardSize board = (cols, rows)
+  where cols = DS.length board
+        rows = length $ DS.index board 0
+
 showBoard :: Board -> [Char]
 showBoard b = unlines $ map (map showSquare) (transpose bList)
   where bList = toList b
-
-printBoard :: Board -> IO ()
-printBoard board = putStrLn $ showBoard board
 
 insertPiece :: Piece -> [Square] -> [Square]
 insertPiece p [] = []
@@ -36,6 +38,10 @@ insertPiece p row@(top:mid:rest)
   | top == Nothing, mid == Just (Piece Red) = [Just p, mid] ++ rest
   | top == Nothing, mid == Just (Piece Blue) = [Just p, mid] ++ rest
   | otherwise = [top] ++ insertPiece p (mid:rest)
+
+validMove :: Board -> Int -> Bool
+validMove board i = i < cols
+  where cols = fst $ boardSize board
 
 playerMove :: Board -> Color -> Int -> Board
 playerMove board color i = DS.update i newColumn board
@@ -52,3 +58,18 @@ checkTransposed board color = any (connectedFour color) (transpose $ toList boar
 
 connectedFour :: Color -> [Square] -> Bool
 connectedFour col = isInfixOf (replicate 4 (Just (Piece col)))
+
+printBoard :: Board -> IO ()
+printBoard board = putStrLn $ showBoard board
+
+getBoardSize :: IO (Int, Int)
+getBoardSize = do
+  putStrLn "Enter number of columns: "
+  columns <- getLine
+  putStrLn "Enter number of rows: "
+  rows <- getLine
+  return ((read columns), (read rows))
+
+getOtherColor :: Color -> Color
+getOtherColor Red = Blue
+getOtherColor Blue = Red
