@@ -23,7 +23,10 @@ showSquare s
 boardSize :: Board -> (Int, Int)
 boardSize board = (cols, rows)
   where cols = DS.length board
-        rows = length $ DS.index board 0
+        rows = length $ getBoardColumn board 0
+
+getBoardColumn :: Board -> Int -> [Square]
+getBoardColumn = DS.index
 
 showBoard :: Board -> [Char]
 showBoard b = unlines $ map (map showSquare) (transpose bList)
@@ -33,15 +36,14 @@ insertPiece :: Piece -> [Square] -> [Square]
 insertPiece p [] = []
 insertPiece p (Nothing:[]) = [Just p]
 insertPiece p row@(top:mid:rest)
-  | top == Just (Piece Red) = row
-  | top == Just (Piece Blue) = row
-  | top == Nothing, mid == Just (Piece Red) = [Just p, mid] ++ rest
-  | top == Nothing, mid == Just (Piece Blue) = [Just p, mid] ++ rest
+  | top /= Nothing = row
+  | top == Nothing, mid /= Nothing = [Just p, mid] ++ rest
   | otherwise = [top] ++ insertPiece p (mid:rest)
 
 validMove :: Board -> Int -> Bool
-validMove board i = i < cols
+validMove board i = i < cols && columnNotFull
   where cols = fst $ boardSize board
+        columnNotFull = (snd (boardSize board)) /= (length $ filter (\s -> s /= Nothing) (getBoardColumn board i))
 
 playerMove :: Board -> Color -> Int -> Board
 playerMove board color i = DS.update i newColumn board

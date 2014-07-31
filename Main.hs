@@ -15,7 +15,6 @@ playGame board color = do
   let isValidMove = validMove board i
   if isValidMove then do
     let newBoard = playerMove board color i
-    printBoard newBoard
     let win = playerHasWon newBoard color
     if win then do
       putStrLn $ "Player " ++ (show color) ++ " wins!"
