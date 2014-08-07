@@ -1,77 +1,126 @@
 module ConnectFour where
 
+import Data.List (isInfixOf)
+import qualified Data.Maybe as DM
+import qualified Data.Foldable as DF
 import qualified Data.Sequence as DS
-import Data.Foldable (toList)
-import Data.List (transpose, isInfixOf, any)
 
-data Color = Red | Blue deriving (Show, Read, Eq)
-data Piece = Piece Color deriving (Read, Show, Eq)
+data Color = Red | Blue deriving (Show, Eq)
+data GameState = Draw | NextMove Color | Win Color
+type Coords = (Int, Int)
+data Square = Square Coords (Maybe Color)
+type BoardData = DS.Seq Square
+type BoardSize = (Int, Int)
+data Board = Board BoardData BoardSize
 
-type Square = Maybe Piece
-type Board = DS.Seq [Square]
+initializeBoard :: Board
+initializeBoard = Board squares (width, height)
+  where squares = DS.fromList squaresList
+        width = 7
+        height = 6
+        squaresList = map (\coord -> Square coord Nothing) [(x, y) | x <- [1..width], y <- [1..height]]
 
-setupBoard :: Int -> Int -> Board
-setupBoard columns rows =
-  DS.replicate columns $ replicate rows Nothing
+getBoardSize :: Board -> BoardSize
+getBoardSize (Board _ size) = size
 
-showSquare :: Square -> Char
-showSquare s
-  | s == Just (Piece Red) = 'r'
-  | s == Just (Piece Blue) = 'b'
-  | otherwise = '-'
+boardHeight = snd . getBoardSize
 
-boardSize :: Board -> (Int, Int)
-boardSize board = (cols, rows)
-  where cols = DS.length board
-        rows = length $ getBoardColumn board 0
+getBoardData :: Board -> BoardData
+getBoardData (Board boardData _) = boardData
 
-getBoardColumn :: Board -> Int -> [Square]
-getBoardColumn = DS.index
+getRow :: Board -> Int -> BoardData
+getRow board row = DS.filter f (getBoardData board)
+  where f square = (snd . getCoords) square == row
 
-showBoard :: Board -> [Char]
-showBoard b = unlines $ map (map showSquare) (transpose bList)
-  where bList = toList b
+getColumn:: Board -> Int -> BoardData
+getColumn board column = DS.filter f (getBoardData board)
+  where f square = (fst . getCoords) square == column
 
-insertPiece :: Piece -> [Square] -> [Square]
-insertPiece p [] = []
-insertPiece p (Nothing:[]) = [Just p]
-insertPiece p row@(top:mid:rest)
-  | top /= Nothing = row
-  | top == Nothing, mid /= Nothing = [Just p, mid] ++ rest
-  | otherwise = [top] ++ insertPiece p (mid:rest)
+getCoords :: Square -> Coords
+getCoords (Square coords _) = coords
 
-validMove :: Board -> Int -> Bool
-validMove board i = i < cols && columnNotFull
-  where cols = fst $ boardSize board
-        columnNotFull = (snd (boardSize board)) /= (length $ filter (\s -> s /= Nothing) (getBoardColumn board i))
+instance Show Board where
+  show board = unlines $ map (\row -> showBoardData row)  rows
+    where boardData = getBoardData board
+          rowIndexes = reverse [1..(boardHeight board)]
+          rows = map (getRow board) rowIndexes
 
-playerMove :: Board -> Color -> Int -> Board
-playerMove board color i = DS.update i newColumn board
-  where newColumn = insertPiece (Piece color) (DS.index board i)
+instance Show Square where
+  show sq
+    | color == Just Red = "r"
+    | color == Just Blue = "b"
+    | otherwise = "-"
+      where color = getSquareColor sq
 
-playerHasWon :: Board -> Color -> Bool
-playerHasWon b c = (check b c) || (checkTransposed b c)
+getSquareColor :: Square -> Maybe Color
+getSquareColor (Square _ a) = a
 
-check :: Board -> Color -> Bool
-check board color = any (connectedFour color) (toList board)
+showBoardData :: BoardData -> String
+showBoardData = DF.concatMap show
 
-checkTransposed :: Board -> Color -> Bool
-checkTransposed board color = any (connectedFour color) (transpose $ toList board)
+insertColor :: Board -> Color -> Int -> (Board, Maybe Coords)
+insertColor board color column = (newBoard, coords)
+  where boardSize = getBoardSize board
+        (boardData, i) = insertColorToBoardData (getBoardData board) color column
+        newBoard = Board boardData boardSize
+        coords = if i == Nothing then Nothing
+                                 else (Just (coordsFromIndex board (DM.fromJust i)))
 
-connectedFour :: Color -> [Square] -> Bool
-connectedFour col = isInfixOf (replicate 4 (Just (Piece col)))
+insertColorToBoardData :: BoardData -> Color -> Int -> (BoardData, Maybe Int)
+insertColorToBoardData boardData color column = (newBoardData, empty)
+  where replaceFn sq = Square (getCoords sq) (Just color)
+        empty = firstEmpty boardData column
+        newBoardData = if empty == Nothing then boardData else DS.adjust replaceFn (DM.fromJust empty) boardData
 
-printBoard :: Board -> IO ()
-printBoard board = putStrLn $ showBoard board
+firstEmpty :: BoardData -> Int -> Maybe Int
+firstEmpty boardData column = DS.findIndexL emptySquare boardData
+  where emptySquare sq = (Nothing == (getSquareColor sq)) && (column == fst (getCoords sq))
 
-getBoardSize :: IO (Int, Int)
-getBoardSize = do
-  putStrLn "Enter number of columns: "
-  columns <- getLine
-  putStrLn "Enter number of rows: "
-  rows <- getLine
-  return ((read columns), (read rows))
+validInsert :: Board -> Color -> Int -> Bool
+validInsert board color column = columnInBoard && columnHasFreeSquare
+  where columnInBoard = column `elem` [1..(fst (getBoardSize board))]
+        columnHasFreeSquare = DS.findIndexL emptySquare (getColumn board column) /= Nothing
+        emptySquare square = Nothing == getSquareColor square
+
+indexFromCoords :: Board -> Coords -> Int
+indexFromCoords board coords = (y - 1) * width + x
+  where width = fst $ getBoardSize board
+        (x, y) = coords
+
+coordsFromIndex :: Board -> Int -> Coords
+coordsFromIndex board i = (x, y)
+  where width = fst $ getBoardSize board
+        y = 1 + (i `div` width)
+        x = 1 + (i `mod` width)
+
+connectedFour :: BoardData -> Color -> Bool
+connectedFour bdata color = isInfixOf fourPieces blist
+  where blist = map getSquareColor (DF.toList bdata)
+        fourPieces = replicate 4 (Just color)
+
+getLines :: Board -> Coords -> [BoardData]
+getLines board (x, y) = [vertical, horizontal] --, diagonal1, diagonal2]
+  where boardData = getBoardData board
+        vertical = DS.filter (\sq -> x == fst (getCoords sq)) boardData
+        horizontal = DS.filter (\sq -> y == snd (getCoords sq)) boardData
+
+isBoardFull :: Board -> Bool
+isBoardFull board = DF.all isNonEmptySquare (getBoardData board)
+  where isNonEmptySquare square = Nothing /= (getSquareColor square)
+
+evaluateBoard :: Board -> Color -> (Maybe Coords) -> GameState
+evaluateBoard board color Nothing = NextMove color
+evaluateBoard board color (Just coords) = if playerWin then Win color
+                                           else if isBoardFull board then Draw
+                                           else NextMove (getOtherColor color)
+  where lines = getLines board coords
+        playerWin = DF.any (\bd -> connectedFour bd color) lines
 
 getOtherColor :: Color -> Color
 getOtherColor Red = Blue
 getOtherColor Blue = Red
+
+{-TODO:-}
+  {-- Fix getLines (horizontal doesn't work)-}
+  {-- add diagonal1, diagonal2-}
+  {-- simplify everything-}

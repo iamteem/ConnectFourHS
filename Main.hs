@@ -2,30 +2,27 @@ module Main where
 
 import ConnectFour
 
-getMove :: Color -> IO Int
-getMove color = do
-  putStrLn $ (show color) ++ ":"
-  i <- getLine
-  return $ (read i) - 1
+getMove :: IO Int
+getMove = do i <- getLine
+             return $ read i
 
 playGame :: Board -> Color -> IO ()
 playGame board color = do
-  printBoard board
-  i <- getMove color
-  let isValidMove = validMove board i
-  if isValidMove then do
-    let newBoard = playerMove board color i
-    let win = playerHasWon newBoard color
-    if win then do
-      putStrLn $ "Player " ++ (show color) ++ " wins!"
-    else do
-      playGame newBoard (getOtherColor color)
+  putStrLn $ (show color) ++ " Move:"
+  move <- getMove
+  if validInsert board color move then do
+    let (newBoard, coords) = insertColor board color move
+    let newGameState = evaluateBoard newBoard color coords
+    putStrLn (show newBoard)
+    case newGameState of Draw -> putStrLn "Draw!"
+                         Win color -> putStrLn $ show newGameState
+                         NextMove newColor -> playGame newBoard newColor
   else do
-    putStrLn $ "Invalid Move"
+    putStrLn "Invalid Move!"
     playGame board color
 
 main = do
   putStrLn "Welcome to ConnectFourHS"
-  boardSize <- getBoardSize
-  let board = setupBoard (fst boardSize) (snd boardSize)
+  let board = initializeBoard
+  putStrLn $ show board
   playGame board Red
