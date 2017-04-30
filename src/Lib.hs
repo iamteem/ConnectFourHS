@@ -1,4 +1,4 @@
-module ConnectFour where
+module Lib where
 
 import qualified Data.Sequence as DS
 import Data.Foldable (toList)

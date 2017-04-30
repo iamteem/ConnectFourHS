@@ -1,6 +1,6 @@
 module Main where
 
-import ConnectFour
+import Lib
 
 getMove :: Color -> IO Int
 getMove color = do
